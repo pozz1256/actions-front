@@ -1,0 +1,53 @@
+name: test
+on:
+  push:
+    branches: [ master development ]
+  pull_request:
+    branches: [ master development ]
+
+env:
+  PROJECT_ID: test-sonect-api
+  GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_TEST }}
+  GCP_SERVICE_ACCOUNT_KMS: ${{ secrets.GCP_SERVICE_ACCOUNT_KMS_TEST }}
+  LOKALISE_API_KEY: ${{ secrets.LOKALISE_API_KEY }}
+  LOAD_BALANCER_NAME: app-user-test-url-map
+  DESTINATION_BUCKET_NAME: app-user-test
+  ENV: ${{ github.ref_name }}
+
+jobs:
+  job_id:
+    # Add "id-token" with the intended permissions.
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    steps:
+      - name: 'Clone repo'
+        uses: 'actions/checkout@v2'
+
+      - id: 'auth'
+        uses: 'google-github-actions/auth@v1'
+        with:
+          credentials_json: '${{ secrets.GCP_SERVICE_ACCOUNT_TEST }}'
+#          workload_identity_provider: 'projects/123456789/locations/global/workloadIdentityPools/my-pool/providers/my-provider'
+#          service_account: 'my-service-account@my-project.iam.gserviceaccount.com'
+
+      - name: 'Set up Cloud SDK'
+        uses: 'google-github-actions/setup-gcloud@v1'
+
+      - name: 'Install docker'
+      - run: |-
+            gcloud --quiet auth configure-docker
+
+      - name: 'Build application'
+        run: |-
+          npm install
+          if npm build:dev
+
+      - name: 'Upload file to storage'
+        run: |-
+          gcloud storage cp dist/ gs://$DESTINATION_BUCKET_NAME/
+
+      - name: 'Invalidate cache'
+        run: |-
+          gcloud compute url-maps invalidate-cdn-cache $LOAD_BALANCER_NAME --path "/*"
